@@ -41,8 +41,8 @@ type Axis struct {
 	Ticks []float64
 }
 
-func (a Axis) LabelSpace(c canvas.C) float64 {
-	face, _ := c.SetFont("DejaVuSerif", 3.0)
+func (a Axis) LabelSpace(c canvas.C, font canvas.Font) float64 {
+	face := font.Face(3.0)
 	space := 0.0
 	for _, pos := range a.Ticks {
 		switch a.Position {
@@ -60,27 +60,22 @@ func (a Axis) LabelSpace(c canvas.C) float64 {
 	return space
 }
 
-func (a Axis) Draw(c canvas.C, rect canvas.Rect, axes Axes) {
-	face, _ := c.SetFont("DejaVuSerif", 3.0)
+func (a Axis) Draw(c canvas.C, proj Projection, axes Axes, font canvas.Font) {
+	face := font.Face(3.0)
 	p := &canvas.Path{}
 	for _, pos := range a.Ticks {
 		switch a.Position {
 		case Left:
-			t := fmt.Sprintf("%g", pos)
-			tw := face.TextWidth(t)
-			th := face.LineHeight()
-			c.DrawText(rect.X-tw, rect.Y-pos+th/2.0, t)
+			label := Label{face, fmt.Sprintf("%g", pos), 0.0, pos, 0.0, AlignRight, AlignMiddle}
+			label.Draw(c, proj)
 			if pos == a.Min || pos == a.Max {
 				continue
 			}
 			p.MoveTo(0.0, pos)
 			p.LineTo(2.0, pos)
 		case Bottom:
-			t := fmt.Sprintf("%g", pos)
-			tw := face.TextWidth(t)
-			th := face.LineHeight()
-			fmt.Println(t, tw, pos, rect.X+pos)
-			c.DrawText(rect.X+pos-tw/2.0, rect.Y+th, t)
+			label := Label{face, fmt.Sprintf("%g", pos), pos, 0.0, 0.0, AlignCenter, AlignTop}
+			label.Draw(c, proj)
 			if pos == a.Min || pos == a.Max {
 				continue
 			}
@@ -90,9 +85,9 @@ func (a Axis) Draw(c canvas.C, rect canvas.Rect, axes Axes) {
 			panic("not implemented")
 		}
 	}
-	p = p.Scale(rect.W/(axes.X.Max-axes.X.Min), rect.H/(axes.Y.Max-axes.Y.Min))
+	p = p.Scale(proj.xscale, proj.yscale)
 	p = p.Stroke(0.3, canvas.RoundCapper, canvas.RoundJoiner, 1.0)
-	c.DrawPath(rect.X, rect.Y, p)
+	c.DrawPath(proj.xoffset, proj.yoffset, p)
 }
 
 type Axes struct {
@@ -118,13 +113,13 @@ func NewAxes(xrange, yrange Range) Axes {
 	return a
 }
 
-func (a Axes) Draw(c canvas.C, rect canvas.Rect) {
+func (a Axes) Draw(c canvas.C, proj Projection, rect canvas.Rect, font canvas.Font) {
 	axes := canvas.Rectangle(rect.X, rect.Y, rect.W, rect.H)
 	axes = axes.Stroke(0.3, canvas.RoundCapper, canvas.RoundJoiner, 1.0)
 	c.DrawPath(0.0, 0.0, axes)
 
-	a.X.Draw(c, rect, a)
-	a.Y.Draw(c, rect, a)
+	a.X.Draw(c, proj, a, font)
+	a.Y.Draw(c, proj, a, font)
 }
 
 type Plot struct {
@@ -133,11 +128,9 @@ type Plot struct {
 	ylabel string
 	lines  []*Line
 
-	Margin        float64
-	TitleFontSize float64
-	TitlePadding  float64
-	LabelFontSize float64
-	LabelPadding  float64
+	Margin       float64
+	TitlePadding float64
+	LabelPadding float64
 }
 
 func New(title string) *Plot {
@@ -145,11 +138,9 @@ func New(title string) *Plot {
 		title: title,
 		lines: []*Line{},
 
-		Margin:        1.0,
-		TitleFontSize: 18.0,
-		TitlePadding:  5.0,
-		LabelFontSize: 12.0,
-		LabelPadding:  3.0,
+		Margin:       1.0,
+		TitlePadding: 5.0,
+		LabelPadding: 3.0,
 	}
 }
 
@@ -165,11 +156,11 @@ func (p *Plot) Add(l *Line) {
 	p.lines = append(p.lines, l)
 }
 
-func (p *Plot) Draw(c canvas.C, w, h float64) {
+func (p *Plot) Draw(c canvas.C, font canvas.Font, w, h float64) {
 	c.Open(w, h)
 
-	titleFace, _ := c.SetFont("DejaVuSerif", p.TitleFontSize)
-	labelFace, _ := c.SetFont("DejaVuSerif", p.LabelFontSize)
+	titleFace := font.Face(18.0)
+	labelFace := font.Face(12.0)
 
 	var xrange, yrange Range
 	for _, l := range p.lines {
@@ -185,20 +176,27 @@ func (p *Plot) Draw(c canvas.C, w, h float64) {
 	if p.title != "" {
 		topMargin += titleFace.LineHeight() + p.TitlePadding
 	}
-	bottomMargin := p.Margin + axes.X.LabelSpace(c)
+	bottomMargin := p.Margin + axes.X.LabelSpace(c, font)
 	if p.ylabel != "" {
 		bottomMargin += labelFace.LineHeight() + p.LabelPadding
 	}
-	leftMargin := p.Margin + axes.Y.LabelSpace(c)
+	leftMargin := p.Margin + axes.Y.LabelSpace(c, font)
 	if p.xlabel != "" {
 		leftMargin += labelFace.LineHeight() + p.LabelPadding
 	}
 	rightMargin := p.Margin
 	rect := canvas.Rect{leftMargin, h - bottomMargin, w - leftMargin - rightMargin, -(h - topMargin - bottomMargin)}
 
-	axes.Draw(c, rect)
+	proj := Projection{
+		xoffset: rect.X,
+		yoffset: rect.Y,
+		xscale:  rect.W / (axes.X.Max - axes.X.Min),
+		yscale:  rect.H / (axes.Y.Max - axes.Y.Min),
+	}
+
+	axes.Draw(c, proj, rect, font)
 	for _, l := range p.lines {
-		l.Draw(c, rect, axes)
+		l.Draw(c, proj)
 	}
 }
 
@@ -237,7 +235,7 @@ func (l *Line) Ranges() (Range, Range) {
 	return Range{xmin, xmax}, Range{ymin, ymax}
 }
 
-func (l *Line) Draw(c canvas.C, rect canvas.Rect, axes Axes) {
+func (l *Line) Draw(c canvas.C, proj Projection) {
 	p := &canvas.Path{}
 	if len(l.xs) > 0 {
 		p.MoveTo(l.xs[0], l.ys[0])
@@ -245,7 +243,7 @@ func (l *Line) Draw(c canvas.C, rect canvas.Rect, axes Axes) {
 	for i := 1; i < len(l.xs); i++ {
 		p.LineTo(l.xs[i], l.ys[i])
 	}
-	p = p.Scale(rect.W/(axes.X.Max-axes.X.Min), rect.H/(axes.Y.Max-axes.Y.Min))
+	p = p.Scale(proj.xscale, proj.yscale)
 	p = p.Stroke(0.3, canvas.RoundCapper, canvas.RoundJoiner, 1.0)
-	c.DrawPath(rect.X, rect.Y, p)
+	c.DrawPath(proj.xoffset, proj.yoffset, p)
 }
