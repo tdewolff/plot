@@ -19,7 +19,7 @@ func main() {
 	svg := canvas.NewSVG(svgFile, fonts)
 	defer svg.Close()
 
-	plot := New()
+	plot := New("")
 	plot.Add(NewLine([]float64{0, 10, 20, 30, 40, 50, 60}, []float64{15, 25, 40, 30, 10, 5, 5}))
 	plot.Draw(svg, 80.0, 50.0)
 }
