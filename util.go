@@ -48,7 +48,7 @@ func (l Label) Draw(c canvas.C, proj Projection) {
 		dx = -w
 	}
 
-	dy := -l.face.Metrics().CapHeight
+	dy := l.face.Metrics().CapHeight
 	if l.valign == AlignMiddle {
 		dy -= h / 2.0
 	} else if l.valign == AlignBottom {
