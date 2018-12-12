@@ -37,27 +37,27 @@ func (l Range) Merge(r Range) Range {
 type Axis struct {
 	Position
 	Range
-	Scale AxisScale
-	Ticks []float64
+	Scale        AxisScale
+	Ticks        []float64
+	LabelPadding float64
 }
 
 func (a Axis) LabelSpace(c canvas.C, font canvas.Font) float64 {
 	face := font.Face(3.0)
 	space := 0.0
 	for _, pos := range a.Ticks {
+		t := fmt.Sprintf("%g", pos)
+		tw, th := face.BBox(t)
 		switch a.Position {
 		case Left:
-			t := fmt.Sprintf("%g", pos)
-			tw := face.TextWidth(t)
 			space = math.Max(space, tw)
 		case Bottom:
-			th := face.LineHeight()
 			space = math.Max(space, th)
 		default:
 			panic("not implemented")
 		}
 	}
-	return space
+	return space + a.LabelPadding
 }
 
 func (a Axis) Draw(c canvas.C, proj Projection, axes Axes, font canvas.Font) {
@@ -66,7 +66,7 @@ func (a Axis) Draw(c canvas.C, proj Projection, axes Axes, font canvas.Font) {
 	for _, pos := range a.Ticks {
 		switch a.Position {
 		case Left:
-			label := Label{face, fmt.Sprintf("%g", pos), 0.0, pos, 0.0, AlignRight, AlignMiddle}
+			label := Label{face, fmt.Sprintf("%g", pos), -a.LabelPadding, pos, 0.0, AlignRight, AlignMiddle}
 			label.Draw(c, proj)
 			if pos == a.Min || pos == a.Max {
 				continue
@@ -74,7 +74,7 @@ func (a Axis) Draw(c canvas.C, proj Projection, axes Axes, font canvas.Font) {
 			p.MoveTo(0.0, pos)
 			p.LineTo(2.0, pos)
 		case Bottom:
-			label := Label{face, fmt.Sprintf("%g", pos), pos, 0.0, 0.0, AlignCenter, AlignTop}
+			label := Label{face, fmt.Sprintf("%g", pos), pos, -a.LabelPadding, 0.0, AlignCenter, AlignTop}
 			label.Draw(c, proj)
 			if pos == a.Min || pos == a.Max {
 				continue
@@ -97,14 +97,16 @@ type Axes struct {
 func NewAxes(xrange, yrange Range) Axes {
 	a := Axes{
 		X: Axis{
-			Position: Bottom,
-			Range:    xrange,
-			Scale:    LinearScale,
+			Position:     Bottom,
+			Range:        xrange,
+			Scale:        LinearScale,
+			LabelPadding: 1.0,
 		},
 		Y: Axis{
-			Position: Left,
-			Range:    yrange,
-			Scale:    LinearScale,
+			Position:     Left,
+			Range:        yrange,
+			Scale:        LinearScale,
+			LabelPadding: 1.0,
 		},
 	}
 
@@ -174,15 +176,15 @@ func (p *Plot) Draw(c canvas.C, font canvas.Font, w, h float64) {
 
 	topMargin := p.Margin
 	if p.title != "" {
-		topMargin += titleFace.LineHeight() + p.TitlePadding
+		topMargin += titleFace.Metrics().LineHeight + p.TitlePadding
 	}
 	bottomMargin := p.Margin + axes.X.LabelSpace(c, font)
 	if p.ylabel != "" {
-		bottomMargin += labelFace.LineHeight() + p.LabelPadding
+		bottomMargin += labelFace.Metrics().LineHeight + p.LabelPadding
 	}
 	leftMargin := p.Margin + axes.Y.LabelSpace(c, font)
 	if p.xlabel != "" {
-		leftMargin += labelFace.LineHeight() + p.LabelPadding
+		leftMargin += labelFace.Metrics().LineHeight + p.LabelPadding
 	}
 	rightMargin := p.Margin
 	rect := canvas.Rect{leftMargin, h - bottomMargin, w - leftMargin - rightMargin, -(h - topMargin - bottomMargin)}
