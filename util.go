@@ -41,17 +41,18 @@ func (l Label) Draw(c canvas.C, proj Projection) {
 	x, y := l.x, l.y
 	w, h := l.face.BBox(l.text)
 
+	dx := 0.0
 	if l.halign == AlignCenter {
-		x -= w / 2.0
+		dx = -w / 2.0
 	} else if l.halign == AlignRight {
-		x -= w
+		dx = -w
 	}
 
-	y -= l.face.LineHeight()
+	dy := -l.face.Metrics().CapHeight
 	if l.valign == AlignMiddle {
-		y += h / 2.0
+		dy -= h / 2.0
 	} else if l.valign == AlignBottom {
-		y -= h
+		dy -= h
 	}
 
 	if l.rot != 0.0 {
@@ -59,5 +60,5 @@ func (l Label) Draw(c canvas.C, proj Projection) {
 	}
 
 	c.SetFont(l.face)
-	c.DrawText(proj.X(x), proj.Y(y), l.text)
+	c.DrawText(proj.X(x)+dx, proj.Y(y)+dy, l.text)
 }
